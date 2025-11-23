@@ -1,20 +1,24 @@
-import React, { useState, useContext } from 'react';
-import { CURRENT_USER, MOCK_VIDEOS } from '../constants';
-import { Upload, PlusSquare, Twitter, BarChart3, Edit2, Trash2, Save, X, MoreVertical, Search, Lock, Mail, User, ListMusic, Sparkles, Image as ImageIcon, Check } from 'lucide-react';
+import React, { useState, useContext, useEffect } from 'react';
+import { MOCK_VIDEOS } from '../constants';
+import { Upload, PlusSquare, Twitter, BarChart3, Edit2, Trash2, Save, X, MoreVertical, Search, Lock, Mail, User, ListMusic, Sparkles, Image as ImageIcon, Check, Video as VideoIcon } from 'lucide-react';
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { UploadContext } from '../App';
+import { UploadContext, AuthContext } from '../App';
 import { generateThumbnailPrompts } from '../services/geminiService';
+import { useNavigate } from 'react-router-dom';
 
 const Dashboard = () => {
   const { startUpload } = useContext(UploadContext);
+  const { currentUser } = useContext(AuthContext);
+  const navigate = useNavigate();
+
   const [activeTab, setActiveTab] = useState<'overview' | 'content' | 'playlists' | 'settings' | 'tweets'>('overview');
   
   // Modal States
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showPlaylistModal, setShowPlaylistModal] = useState(false);
   
-  // Channel Details
-  const [channelDetails, setChannelDetails] = useState(CURRENT_USER);
+  // Channel Details (Local state to allow editing without affecting global mock immediately)
+  const [channelDetails, setChannelDetails] = useState(currentUser || { name: '', description: '' });
   const [tweetText, setTweetText] = useState('');
 
   // Upload Flow State
@@ -32,6 +36,17 @@ const Dashboard = () => {
   // Playlist State
   const [playlistName, setPlaylistName] = useState('');
   const [playlistDesc, setPlaylistDesc] = useState('');
+
+  // Protect Route
+  useEffect(() => {
+      if (!currentUser) {
+          navigate('/signin');
+      } else {
+          setChannelDetails(currentUser);
+      }
+  }, [currentUser, navigate]);
+
+  if (!currentUser) return null;
 
   // Mock analytics data
   const data = [
@@ -261,7 +276,7 @@ const Dashboard = () => {
       <div className="max-w-xl mx-auto">
           <div className="bg-[#1f1f1f] rounded-xl border border-gray-800 p-4">
               <div className="flex gap-3">
-                  <img src={CURRENT_USER.avatar} alt="" className="w-10 h-10 rounded-full" />
+                  <img src={currentUser.avatar} alt="" className="w-10 h-10 rounded-full" />
                   <div className="flex-1">
                       <textarea 
                         value={tweetText}
@@ -533,5 +548,3 @@ const Dashboard = () => {
 };
 
 export default Dashboard;
-// VideoIcon import was missing in original snippet for Tab button, added it to top import
-import { Video as VideoIcon } from 'lucide-react';

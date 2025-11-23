@@ -1,13 +1,30 @@
 import React, { useState, createContext, useContext, useEffect } from 'react';
-import { HashRouter as Router, Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom';
-import { Menu, Search, Video as VideoIcon, Bell, User, LogOut, Upload, Twitter, LayoutGrid, PlaySquare, Film, X, Home as HomeIcon } from 'lucide-react';
+import { HashRouter as Router, Routes, Route, Link, useNavigate, useLocation, Navigate } from 'react-router-dom';
+import { Menu, Search, Video as VideoIcon, Bell, User, LogOut, Upload, Twitter, LayoutGrid, PlaySquare, Film, X, Home as HomeIcon, LogIn } from 'lucide-react';
 import Home from './pages/Home';
 import Watch from './pages/Watch';
 import Channel from './pages/Channel';
 import Dashboard from './pages/Dashboard';
+import Auth from './pages/Auth';
 import { CURRENT_USER } from './constants';
+import { User as UserType } from './types';
 
-// --- Global Context for Upload ---
+// --- Auth Context ---
+interface AuthContextType {
+    currentUser: UserType | null;
+    login: (credentials: any) => void;
+    signup: (data: any) => void;
+    logout: () => void;
+}
+
+export const AuthContext = createContext<AuthContextType>({
+    currentUser: null,
+    login: () => {},
+    signup: () => {},
+    logout: () => {},
+});
+
+// --- Upload Context ---
 interface UploadContextType {
   isUploading: boolean;
   progress: number;
@@ -55,7 +72,9 @@ interface HeaderProps {
 
 const Header: React.FC<HeaderProps> = ({ toggleSidebar }) => {
   const navigate = useNavigate();
+  const { currentUser, logout } = useContext(AuthContext);
   const [search, setSearch] = useState('');
+  const [showUserMenu, setShowUserMenu] = useState(false);
 
   return (
     <header className="sticky top-0 z-50 bg-[#0f0f0f] border-b border-gray-800 h-14 flex items-center justify-between px-4">
@@ -87,16 +106,46 @@ const Header: React.FC<HeaderProps> = ({ toggleSidebar }) => {
       </div>
 
       <div className="flex items-center gap-3">
-        <button onClick={() => navigate('/dashboard')} className="hidden sm:flex items-center gap-2 bg-gray-800 hover:bg-gray-700 px-3 py-1.5 rounded-full text-sm font-medium transition-colors">
-           <Upload size={16} /> Create
-        </button>
-        <button className="p-2 hover:bg-gray-800 rounded-full relative">
-          <Bell size={20} />
-          <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full border-2 border-[#0f0f0f]"></span>
-        </button>
-        <button onClick={() => navigate('/dashboard')} className="w-8 h-8 rounded-full overflow-hidden border border-gray-700">
-          <img src={CURRENT_USER.avatar} alt="User" className="w-full h-full object-cover" />
-        </button>
+        {currentUser ? (
+            <>
+                <button onClick={() => navigate('/dashboard')} className="hidden sm:flex items-center gap-2 bg-gray-800 hover:bg-gray-700 px-3 py-1.5 rounded-full text-sm font-medium transition-colors">
+                   <Upload size={16} /> Create
+                </button>
+                <button className="p-2 hover:bg-gray-800 rounded-full relative">
+                  <Bell size={20} />
+                  <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full border-2 border-[#0f0f0f]"></span>
+                </button>
+                <div className="relative">
+                    <button 
+                        onClick={() => setShowUserMenu(!showUserMenu)}
+                        className="w-8 h-8 rounded-full overflow-hidden border border-gray-700"
+                    >
+                      <img src={currentUser.avatar} alt="User" className="w-full h-full object-cover" />
+                    </button>
+                    {showUserMenu && (
+                        <div className="absolute right-0 top-10 w-48 bg-[#1f1f1f] border border-gray-700 rounded-lg shadow-xl py-1 z-50">
+                            <div className="px-4 py-3 border-b border-gray-700">
+                                <p className="text-sm font-bold text-white truncate">{currentUser.name}</p>
+                                <p className="text-xs text-gray-400">@handle</p>
+                            </div>
+                            <button onClick={() => { navigate('/dashboard'); setShowUserMenu(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-800 flex items-center gap-2">
+                                <VideoIcon size={16} /> Dashboard
+                            </button>
+                            <button onClick={() => { logout(); setShowUserMenu(false); }} className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-gray-800 flex items-center gap-2">
+                                <LogOut size={16} /> Sign Out
+                            </button>
+                        </div>
+                    )}
+                </div>
+            </>
+        ) : (
+            <Link to="/signin" className="flex items-center gap-2 px-4 py-2 bg-[#2a2a2a] hover:bg-[#3a3a3a] border border-gray-700 rounded-full text-sm font-medium text-blue-400 transition-colors">
+                <div className="p-0.5 border border-blue-400 rounded-full">
+                    <User size={12} className="fill-blue-400" />
+                </div>
+                Sign In
+            </Link>
+        )}
       </div>
     </header>
   );
@@ -148,15 +197,16 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, isOverlay, onClose }) => {
 const AppLayout = () => {
     const location = useLocation();
     const isWatchPage = location.pathname.startsWith('/watch');
+    const isAuthPage = location.pathname === '/signin' || location.pathname === '/signup';
     
     // Sidebar logic: 
     // - On large screens: default open, unless watch page.
     // - On small screens: default closed.
-    const [isSidebarOpen, setSidebarOpen] = useState(!isWatchPage);
+    const [isSidebarOpen, setSidebarOpen] = useState(!isWatchPage && !isAuthPage);
 
     // Effect: Close sidebar automatically when entering watch page on mobile or desktop default
     useEffect(() => {
-        if (isWatchPage) {
+        if (isWatchPage || isAuthPage) {
             setSidebarOpen(false);
         } else {
             // Restore sidebar on other pages if on desktop
@@ -164,9 +214,20 @@ const AppLayout = () => {
                 setSidebarOpen(true);
             }
         }
-    }, [location.pathname, isWatchPage]);
+    }, [location.pathname, isWatchPage, isAuthPage]);
 
     const toggleSidebar = () => setSidebarOpen(!isSidebarOpen);
+
+    if (isAuthPage) {
+        return (
+            <div className="min-h-screen bg-[#0f0f0f] text-white font-sans">
+                <Routes>
+                    <Route path="/signin" element={<Auth />} />
+                    <Route path="/signup" element={<Auth />} />
+                </Routes>
+            </div>
+        )
+    }
 
     return (
         <div className="min-h-screen bg-[#0f0f0f] text-white font-sans">
@@ -186,6 +247,8 @@ const AppLayout = () => {
                        <Route path="/watch/:videoId" element={<Watch />} />
                        <Route path="/channel/:channelId" element={<Channel />} />
                        <Route path="/dashboard" element={<Dashboard />} />
+                       {/* Redirect legacy links if any */}
+                       <Route path="*" element={<Navigate to="/" />} />
                    </Routes>
               </main>
           </div>
@@ -195,9 +258,13 @@ const AppLayout = () => {
 }
 
 const App = () => {
+  // Upload State
   const [isUploading, setIsUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [fileName, setFileName] = useState('');
+
+  // Auth State - Defaulting to null to demonstrate sign-in page
+  const [currentUser, setCurrentUser] = useState<UserType | null>(null);
 
   const startUpload = (file: string) => {
     setIsUploading(true);
@@ -217,12 +284,38 @@ const App = () => {
     }, 400);
   };
 
+  const login = (credentials: any) => {
+      // Mock login - strictly using credentials for show
+      console.log("Logging in with", credentials);
+      setCurrentUser(CURRENT_USER);
+  };
+
+  const signup = (data: any) => {
+      // Mock signup
+      console.log("Signing up with", data);
+      const newUser: UserType = {
+          id: `u${Date.now()}`,
+          name: data.username,
+          avatar: data.avatar,
+          banner: data.banner,
+          subscribers: '0',
+          description: 'New creator'
+      };
+      setCurrentUser(newUser);
+  };
+
+  const logout = () => {
+      setCurrentUser(null);
+  };
+
   return (
-    <UploadContext.Provider value={{ isUploading, progress, startUpload, fileName }}>
-      <Router>
-        <AppLayout />
-      </Router>
-    </UploadContext.Provider>
+    <AuthContext.Provider value={{ currentUser, login, signup, logout }}>
+        <UploadContext.Provider value={{ isUploading, progress, startUpload, fileName }}>
+          <Router>
+            <AppLayout />
+          </Router>
+        </UploadContext.Provider>
+    </AuthContext.Provider>
   );
 };
 
